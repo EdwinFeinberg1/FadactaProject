@@ -1,13 +1,33 @@
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase'; 
-import { StyleSheet, View, Alert, Text, Modal } from 'react-native';
-import { Button, Input } from '@rneui/themed';
+import { StyleSheet, View, Text, Alert, Modal, ScrollView } from 'react-native';
+import { Button, Input } from '@rneui/themed'; 
+import { useNavigation, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+
+type RootStackParamList = {
+  Groups: undefined;
+  GroupDetail: { groupId: string };
+};
+
+type GroupsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Groups'>;
+type GroupDetailScreenRouteProp = RouteProp<RootStackParamList, 'GroupDetail'>;
+
+type Group = {
+  name: string;
+};
+
+type SupabaseInsertResponse<T> = {
+  data: T[] | null;
+  error: any;
+};
 
 export default function GroupsScreen() {
   const [groupName, setGroupName] = useState<string>('');
-  const [groups, setGroups] = useState<string[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [modalVisible, setModalVisible] = useState<boolean>(false);
   const [newGroupName, setNewGroupName] = useState<string>('');
+  const navigation = useNavigation<GroupsScreenNavigationProp>();
 
   useEffect(() => {
     const checkSession = async () => {
@@ -36,7 +56,7 @@ export default function GroupsScreen() {
     try {
       const { data, error } = await supabase
         .from('groups')
-        .select('name');
+        .select('id, name');
 
       if (error) {
         console.error('Error fetching groups:', error.message);
@@ -44,7 +64,7 @@ export default function GroupsScreen() {
       } else {
         console.log('Groups fetched:', data);
         if (data) {
-          setGroups(data.map(group => group.name));
+          setGroups(data as Group[]);
         }
       }
     } catch (err) {
@@ -55,7 +75,7 @@ export default function GroupsScreen() {
   const createGroup = async () => {
     if (newGroupName.trim() !== '') {
       try {
-        const { data, error } = await supabase
+        const { data, error }: SupabaseInsertResponse<Group> = await supabase
           .from('groups')
           .insert([{ name: newGroupName }]);
 
@@ -64,7 +84,9 @@ export default function GroupsScreen() {
           Alert.alert('Error', error.message);
         } else {
           console.log('Group created:', data);
-          setGroups([...groups, newGroupName]);
+          if (data) { // Check if data is not null and has items
+            setGroups([...groups, {  name: newGroupName }]);
+          }
           setNewGroupName('');
           setModalVisible(false);
         }
@@ -76,14 +98,25 @@ export default function GroupsScreen() {
     }
   };
 
+  const navigateToGroupDetails = (groupId: string) => {
+    navigation.navigate('GroupDetail', { groupId });
+  };
+
   return (
     <View style={styles.container}>
       <Button title="Create a Group" onPress={() => setModalVisible(true)} buttonStyle={styles.button} />
       <Button title="Join a Group" onPress={() => {}} buttonStyle={styles.button} />
       <Text style={styles.headerText}>My Groups</Text>
-      {groups.map((group, index) => (
-        <Text key={index} style={styles.groupName}>{group}</Text>
-      ))}
+      <ScrollView>
+        {groups.map((group, index) => (
+          <Button
+            key={index}
+            title={group.name}
+            onPress={() => navigateToGroupDetails(group.name)}
+            buttonStyle={styles.groupButton}
+          />
+        ))}
+      </ScrollView>
 
       <Modal
         animationType="slide"
@@ -121,8 +154,8 @@ const styles = StyleSheet.create({
     width: 200,
     marginVertical: 10,
   },
-  groupName: {
-    fontSize: 18,
+  groupButton: {
+    width: 200,
     marginVertical: 5,
   },
   modalView: {
